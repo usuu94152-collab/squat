@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQUAT DEPTH CHECKER</title>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --rep: #00ff88;
+    --norep: #ff3355;
+    --accent: #ffcc00;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ───── SCREEN SYSTEM ───── */
+  .screen { display: none; width: 100vw; height: 100vh; }
+  .screen.active { display: flex; }
+
+  /* ───── GUIDE SCREEN ───── */
+  #guideScreen {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(0,255,136,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(255,204,0,0.05) 0%, transparent 50%),
+      var(--bg);
+    overflow-y: auto;
+  }
+
+  .guide-inner {
+    width: 100%;
+    max-width: 600px;
+    padding: 40px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .brand-label {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .brand-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(42px, 10vw, 64px);
+    line-height: 0.9;
+    color: var(--text);
+    letter-spacing: 2px;
+  }
+
+  .brand-title span {
+    color: var(--rep);
+  }
+
+  .brand-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  /* diagram */
+  .diagram-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+
+  .squat-svg-wrap { flex-shrink: 0; }
+
+  .diagram-text {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .diagram-text h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .judge-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .badge {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .badge.rep { background: var(--rep); color: #000; }
+  .badge.norep { background: var(--norep); color: #fff; }
+
+  .judge-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* steps */
+  .steps-title {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .step-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: var(--accent);
+    line-height: 1;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+  }
+
+  .step-content { display: flex; flex-direction: column; gap: 2px; }
+
+  .step-head {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .step-body {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* warn */
+  .warn-box {
+    background: rgba(255,204,0,0.06);
+    border: 1px solid rgba(255,204,0,0.2);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 12px;
+    color: #c8a800;
+    line-height: 1.7;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .warn-icon { font-size: 16px; flex-shrink: 0; }
+
+  /* start btn */
+  .start-btn {
+    width: 100%;
+    padding: 18px;
+    background: var(--rep);
+    color: #000;
+    border: none;
+    border-radius: 14px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .start-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.15);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .start-btn:hover::after { opacity: 1; }
+  .start-btn:active { transform: scale(0.98); }
+
+  /* ───── CAM SCREEN ───── */
+  #camScreen {
+    position: relative;
+    flex-direction: column;
+    background: #000;
+  }
+
+  #video {
+    position: absolute;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* mirror for front cam; remove for side cam */
+    opacity: 0;
+  }
+
+  #canvas {
+    position: absolute;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+
+  /* HUD top bar */
+  .hud-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+  }
+
+  .hud-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    color: var(--accent);
+  }
+
+  .back-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .back-btn:hover { background: rgba(255,255,255,0.2); }
+
+  /* REP / NOREP VERDICT */
+  #verdict {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(80px, 20vw, 140px);
+    letter-spacing: 6px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    text-shadow: 0 0 40px currentColor;
+  }
+
+  #verdict.show { opacity: 1; }
+  #verdict.rep { color: var(--rep); }
+  #verdict.norep { color: var(--norep); }
+
+  /* bottom HUD */
+  .hud-bottom {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    padding: 20px;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .score-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .score-card {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 10px 20px;
+    text-align: center;
+    min-width: 80px;
+  }
+
+  .score-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  .score-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    line-height: 1;
+  }
+
+  .score-val.rep { color: var(--rep); }
+  .score-val.norep { color: var(--norep); }
+  .score-val.neutral { color: var(--text); }
+
+  /* depth indicator bar */
+  .depth-bar-wrap {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .depth-bar-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-weight: 700;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+
+  .depth-bar-track {
+    width: 8px;
+    height: 160px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .depth-bar-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    border-radius: 4px;
+    transition: height 0.1s, background 0.1s;
+    background: var(--muted);
+  }
+
+  /* threshold line */
+  .depth-bar-threshold {
+    position: absolute;
+    left: -4px; right: -4px;
+    height: 2px;
+    background: var(--accent);
+    top: 50%; /* will be adjusted by JS */
+    border-radius: 1px;
+  }
+
+  /* detection status */
+  .detect-status {
+    position: absolute;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-weight: 700;
+    background: rgba(0,0,0,0.4);
+    padding: 4px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .detect-status.detected { color: var(--rep); }
+
+  /* loading overlay */
+  #loadingOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--rep);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  /* flash overlay */
+  #flashOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+
+  #flashOverlay.flash-rep { background: rgba(0,255,136,0.15); }
+  #flashOverlay.flash-norep { background: rgba(255,51,85,0.12); }
+</style>
+</head>
+<body>
+
+<!-- ═══ GUIDE SCREEN ═══ -->
+<div id="guideScreen" class="screen active">
+  <div class="guide-inner">
+
+    <div class="brand">
+      <div class="brand-label">CrossFit · PE Tool</div>
+      <div class="brand-title">SQUAT<br><span>DEPTH</span><br>CHECKER</div>
+      <div class="brand-sub">카메라로 스쿼트 깊이를 실시간 판정합니다.<br>고관절이 무릎 아래로 내려가야 REP 인정!</div>
+    </div>
+
+    <!-- Diagram -->
+    <div class="diagram-box">
+      <div class="squat-svg-wrap">
+        <svg width="110" height="130" viewBox="0 0 110 130">
+          <!-- Good squat (hip below knee) -->
+          <!-- torso -->
+          <line x1="55" y1="20" x2="45" y2="70" stroke="#00ff88" stroke-width="3" stroke-linecap="round"/>
+          <!-- upper leg -->
+          <line x1="45" y1="70" x2="25" y2="95" stroke="#00ff88" stroke-width="3" stroke-linecap="round"/>
+          <!-- lower leg -->
+          <line x1="25" y1="95" x2="30" y2="120" stroke="#00ff88" stroke-width="3" stroke-linecap="round"/>
+          <!-- head -->
+          <circle cx="55" cy="14" r="7" fill="none" stroke="#00ff88" stroke-width="2.5"/>
+          <!-- HIP dot -->
+          <circle cx="45" cy="70" r="5" fill="#ffcc00"/>
+          <!-- KNEE dot -->
+          <circle cx="25" cy="95" r="5" fill="#00aaff"/>
+          <!-- hip label -->
+          <text x="52" y="73" fill="#ffcc00" font-size="9" font-family="monospace">HIP</text>
+          <!-- knee label -->
+          <text x="32" y="98" fill="#00aaff" font-size="9" font-family="monospace">KNEE</text>
+          <!-- arrow showing hip < knee -->
+          <text x="60" y="90" fill="#00ff88" font-size="18" font-family="monospace">✓</text>
+        </svg>
+      </div>
+      <div class="diagram-text">
+        <h3>판정 기준</h3>
+        <div class="judge-row">
+          <span class="badge rep">REP</span>
+          <span class="judge-desc">고관절(엉덩이)이 무릎보다 <strong style="color:var(--text)">아래</strong>로 내려간 경우<br>→ 스쿼트 완전히 인정</span>
+        </div>
+        <div class="judge-row">
+          <span class="badge norep">NO REP</span>
+          <span class="judge-desc">고관절이 무릎과 같거나 <strong style="color:var(--text)">위</strong>에 있는 경우<br>→ 깊이 부족, 다시 내려가세요</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="steps-title">촬영 전 준비사항</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-head">📐 측면(옆면)에서 촬영하세요</div>
+          <div class="step-body">카메라가 몸의 정면·후면이 아닌 <strong style="color:var(--text)">옆면</strong>을 바라봐야 합니다. 왼쪽 또는 오른쪽 어느 쪽이든 괜찮습니다.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-head">💡 밝은 환경에서 촬영하세요</div>
+          <div class="step-body">전신이 잘 보이도록 배경과 대비되는 밝은 공간이 좋습니다. 역광은 피하세요.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-head">📏 전신이 화면에 들어오게 하세요</div>
+          <div class="step-body">머리부터 발끝까지 보여야 포즈 인식이 정확합니다. 카메라를 약 1~1.5m 거리에 두고 높이는 허리~가슴 높이가 적당합니다.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-head">👕 몸의 윤곽이 보이는 복장</div>
+          <div class="step-body">너무 헐렁한 옷보다는 운동복처럼 몸선이 보이는 옷이 인식 정확도를 높입니다.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <div class="step-head">📱 가로 모드 또는 세로 모드</div>
+          <div class="step-body">전신이 잘 들어오면 어떤 방향이든 됩니다. 가로 모드가 더 넓게 보여 추천합니다.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="warn-box">
+      <span class="warn-icon">⚠️</span>
+      <span>카메라 권한을 허용해야 작동합니다. AI 포즈 인식 모델 로딩에 수초가 걸릴 수 있습니다. 조명이 어둡거나 카메라 각도가 정면·후면이면 인식률이 크게 떨어집니다.</span>
+    </div>
+
+    <button class="start-btn" onclick="startCamera()">카메라 시작하기 →</button>
+
+  </div>
+</div>
+
+<!-- ═══ CAM SCREEN ═══ -->
+<div id="camScreen" class="screen">
+
+  <video id="video" playsinline></video>
+  <canvas id="canvas"></canvas>
+
+  <!-- Loading overlay -->
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text">AI 모델 로딩 중...</div>
+  </div>
+
+  <!-- Flash -->
+  <div id="flashOverlay"></div>
+
+  <!-- HUD top -->
+  <div class="hud-top">
+    <div class="hud-logo">SQUAT DEPTH</div>
+    <button class="back-btn" onclick="goBack()">← 가이드</button>
+  </div>
+
+  <!-- Detection status -->
+  <div class="detect-status" id="detectStatus">사람을 찾는 중...</div>
+
+  <!-- Verdict -->
+  <div id="verdict"></div>
+
+  <!-- Depth bar -->
+  <div class="depth-bar-wrap">
+    <div class="depth-bar-label">DEPTH</div>
+    <div class="depth-bar-track">
+      <div class="depth-bar-fill" id="depthFill"></div>
+      <div class="depth-bar-threshold" id="depthThreshold"></div>
+    </div>
+  </div>
+
+  <!-- HUD bottom -->
+  <div class="hud-bottom">
+    <div class="score-row">
+      <div class="score-card">
+        <div class="score-label">REP</div>
+        <div class="score-val rep" id="repCount">0</div>
+      </div>
+      <div class="score-card">
+        <div class="score-label">NO REP</div>
+        <div class="score-val norep" id="noRepCount">0</div>
+      </div>
+      <div class="score-card">
+        <div class="score-label">TOTAL</div>
+        <div class="score-val neutral" id="totalCount">0</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+let pose = null;
+let camera = null;
+let repCount = 0;
+let noRepCount = 0;
+
+// squat state machine
+// phases: 'standing' → 'descending' → 'bottom' → 'ascending' → 'standing'
+let squatPhase = 'standing';
+let wasBelow = false;   // hip was below knee
+let verdictTimeout = null;
+let lastHipY = null;
+let lastKneeY = null;
+
+// ═══════════════════════════════════════
+//  SCREEN HELPERS
+// ═══════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goBack() {
+  if (camera) { try { camera.stop(); } catch(e){} }
+  showScreen('guideScreen');
+}
+
+// ═══════════════════════════════════════
+//  START CAMERA + MEDIAPIPE
+// ═══════════════════════════════════════
+async function startCamera() {
+  showScreen('camScreen');
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Init MediaPipe Pose
+  pose = new Pose({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
+  });
+
+  pose.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    enableSegmentation: false,
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5,
+  });
+
+  pose.onResults(results => onPoseResults(results, canvas, ctx));
+
+  camera = new Camera(video, {
+    onFrame: async () => {
+      canvas.width = video.videoWidth || window.innerWidth;
+      canvas.height = video.videoHeight || window.innerHeight;
+      await pose.send({ image: video });
+    },
+    width: 1280,
+    height: 720,
+    facingMode: 'environment', // rear camera for side-shot; user can flip
+  });
+
+  try {
+    await camera.start();
+    document.getElementById('loadingOverlay').style.display = 'none';
+  } catch(e) {
+    document.getElementById('loadingOverlay').innerHTML =
+      `<div style="color:#ff3355;font-size:14px;text-align:center;padding:20px;">
+        카메라 권한이 필요합니다.<br><br>브라우저 설정에서<br>카메라 권한을 허용해주세요.
+      </div>`;
+  }
+}
+
+// ═══════════════════════════════════════
+//  POSE RESULT HANDLER
+// ═══════════════════════════════════════
+function onPoseResults(results, canvas, ctx) {
+  const W = canvas.width;
+  const H = canvas.height;
+
+  // Draw video frame
+  ctx.save();
+  ctx.clearRect(0, 0, W, H);
+  // Draw flipped video (mirror for rear cam side shot)
+  ctx.drawImage(results.image, 0, 0, W, H);
+  ctx.restore();
+
+  if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+    document.getElementById('detectStatus').textContent = '사람을 찾는 중...';
+    document.getElementById('detectStatus').classList.remove('detected');
+    return;
+  }
+
+  document.getElementById('detectStatus').textContent = '포즈 감지됨 ✓';
+  document.getElementById('detectStatus').classList.add('detected');
+
+  const lm = results.poseLandmarks;
+
+  // ── Pick the side with higher visibility (hip + knee)
+  // Left side: hip=23, knee=25 / Right side: hip=24, knee=26
+  const leftHip   = lm[23];
+  const leftKnee  = lm[25];
+  const rightHip  = lm[24];
+  const rightKnee = lm[26];
+
+  const leftVis  = (leftHip.visibility  || 0) + (leftKnee.visibility  || 0);
+  const rightVis = (rightHip.visibility || 0) + (rightKnee.visibility || 0);
+
+  let hip, knee, hipIdx, kneeIdx;
+  if (leftVis >= rightVis) {
+    hip = leftHip; knee = leftKnee; hipIdx = 23; kneeIdx = 25;
+  } else {
+    hip = rightHip; knee = rightKnee; hipIdx = 24; kneeIdx = 26;
+  }
+
+  const hipPx  = { x: hip.x  * W, y: hip.y  * H };
+  const kneePx = { x: knee.x * W, y: knee.y * H };
+
+  // depth = hip.y (larger y = lower on screen)
+  // hip below knee = hip.y > knee.y
+  const hipBelowKnee = hipPx.y > kneePx.y;
+
+  // ── Draw skeleton (simplified: just key joints)
+  drawSkeleton(ctx, lm, W, H);
+
+  // ── Highlight hip & knee
+  drawJoint(ctx, hipPx, 10, '#ffcc00');
+  drawJoint(ctx, kneePx, 10, '#00aaff');
+
+  // Labels
+  ctx.font = 'bold 13px Noto Sans KR';
+  ctx.fillStyle = '#ffcc00';
+  ctx.fillText('HIP', hipPx.x + 14, hipPx.y + 4);
+  ctx.fillStyle = '#00aaff';
+  ctx.fillText('KNEE', kneePx.x + 14, kneePx.y + 4);
+
+  // Depth indicator line (hip → knee horizontal guide)
+  ctx.save();
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = hipBelowKnee ? 'rgba(0,255,136,0.5)' : 'rgba(255,51,85,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(hipPx.x, hipPx.y);
+  ctx.lineTo(kneePx.x, hipPx.y);
+  ctx.stroke();
+  // vertical line knee height
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(0,170,255,0.4)';
+  ctx.beginPath();
+  ctx.moveTo(kneePx.x, kneePx.y - 30);
+  ctx.lineTo(kneePx.x, kneePx.y + 30);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Depth bar
+  updateDepthBar(hip.y, knee.y);
+
+  // ── Squat state machine
+  processSquat(hipBelowKnee);
+}
+
+// ═══════════════════════════════════════
+//  SQUAT STATE MACHINE
+// ═══════════════════════════════════════
+/*
+  Logic:
+  - When person descends (hipBelowKnee becomes true), record 'below'
+  - When person rises back up (hipBelowKnee becomes false) AND was below,
+    → count REP
+  - If person never goes below → NO REP on rise (only if they clearly tried)
+  Track by looking for squat attempt: hip y increasing (going down)
+*/
+
+let hipYHistory = [];
+let repRegistered = false;
+
+function processSquat(hipBelowKnee) {
+
+  if (hipBelowKnee) {
+    wasBelow = true;
+    repRegistered = false;
+  }
+
+  // Transition: was below → now above = completed ascent
+  if (!hipBelowKnee && wasBelow && !repRegistered) {
+    // REP!
+    repCount++;
+    repRegistered = true;
+    wasBelow = false;
+    showVerdict('rep');
+    updateScores();
+  }
+}
+
+// Also detect NO REP: person attempts squat but never gets hip below knee
+// We detect "attempt" by checking if hips descended then came back up without ever going below knee
+// Use a simple threshold approach: if hip descends > 15% screen and never goes below, log NO REP
+
+let hipDescendStart = null;
+let hipDescendMax = null;
+let noRepRegistered = false;
+let lastHipNorm = null;
+
+function processSquatAdvanced(hipY, kneeY, hipBelowKnee) {
+  // hipY and kneeY are normalized 0-1
+
+  if (lastHipNorm === null) { lastHipNorm = hipY; return; }
+
+  const descending = hipY > lastHipNorm + 0.005;
+  const ascending  = hipY < lastHipNorm - 0.005;
+
+  // Start of descent
+  if (descending && hipDescendStart === null) {
+    hipDescendStart = hipY;
+    hipDescendMax = hipY;
+    noRepRegistered = false;
+    repRegistered = false;
+  }
+
+  // Track max descent
+  if (hipDescendStart !== null && hipY > hipDescendMax) {
+    hipDescendMax = hipY;
+    if (hipBelowKnee) wasBelow = true;
+  }
+
+  // Ascending after a descent
+  if (ascending && hipDescendStart !== null) {
+    const descended = hipDescendMax - hipDescendStart;
+    if (descended > 0.08) { // meaningful descent
+      if (wasBelow && !repRegistered) {
+        repCount++;
+        repRegistered = true;
+        showVerdict('rep');
+        updateScores();
+      } else if (!wasBelow && !noRepRegistered) {
+        noRepCount++;
+        noRepRegistered = true;
+        showVerdict('norep');
+        updateScores();
+      }
+    }
+    // Reset if fully back to start
+    if (hipY < hipDescendStart + 0.03) {
+      hipDescendStart = null;
+      hipDescendMax = null;
+      wasBelow = false;
+    }
+  }
+
+  lastHipNorm = hipY;
+}
+
+// Override to use advanced logic
+function processSquat(hipBelowKnee, hipY, kneeY) {
+  // called from onPoseResults with full y values
+}
+
+// Patch onPoseResults to call advanced
+const _origOnPose = onPoseResults;
+
+// ═══════════════════════════════════════
+//  RE-WIRE: replace simple state machine
+// ═══════════════════════════════════════
+function onPoseResults(results, canvas, ctx) {
+  const W = canvas.width;
+  const H = canvas.height;
+
+  ctx.save();
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(results.image, 0, 0, W, H);
+  ctx.restore();
+
+  if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+    document.getElementById('detectStatus').textContent = '사람을 찾는 중...';
+    document.getElementById('detectStatus').classList.remove('detected');
+    return;
+  }
+
+  document.getElementById('detectStatus').textContent = '포즈 감지됨 ✓';
+  document.getElementById('detectStatus').classList.add('detected');
+
+  const lm = results.poseLandmarks;
+
+  const leftHip   = lm[23], leftKnee  = lm[25];
+  const rightHip  = lm[24], rightKnee = lm[26];
+  const leftVis   = (leftHip.visibility||0)+(leftKnee.visibility||0);
+  const rightVis  = (rightHip.visibility||0)+(rightKnee.visibility||0);
+
+  let hip, knee;
+  if (leftVis >= rightVis) { hip = leftHip; knee = leftKnee; }
+  else { hip = rightHip; knee = rightKnee; }
+
+  const hipPx  = { x: hip.x  * W, y: hip.y  * H };
+  const kneePx = { x: knee.x * W, y: knee.y * H };
+  const hipBelowKnee = hip.y > knee.y;
+
+  // Draw
+  drawSkeleton(ctx, lm, W, H);
+  drawJoint(ctx, hipPx, 12, '#ffcc00');
+  drawJoint(ctx, kneePx, 12, '#00aaff');
+
+  ctx.font = 'bold 14px "Noto Sans KR", sans-serif';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 4;
+  ctx.fillStyle = '#ffcc00';
+  ctx.fillText('HIP', hipPx.x + 16, hipPx.y + 5);
+  ctx.fillStyle = '#00aaff';
+  ctx.fillText('KNEE', kneePx.x + 16, kneePx.y + 5);
+  ctx.shadowBlur = 0;
+
+  // Depth guide lines
+  ctx.save();
+  ctx.setLineDash([8, 5]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = hipBelowKnee ? 'rgba(0,255,136,0.6)' : 'rgba(255,51,85,0.6)';
+  ctx.beginPath();
+  ctx.moveTo(0, kneePx.y);
+  ctx.lineTo(W, kneePx.y);
+  ctx.stroke();
+  ctx.restore();
+
+  // Label the threshold line
+  ctx.save();
+  ctx.font = 'bold 11px "Bebas Neue", monospace';
+  ctx.fillStyle = hipBelowKnee ? '#00ff88' : '#ff3355';
+  ctx.fillText('KNEE LINE', 10, kneePx.y - 6);
+  ctx.restore();
+
+  updateDepthBar(hip.y, knee.y);
+  processSquatAdvanced(hip.y, knee.y, hipBelowKnee);
+}
+
+// ═══════════════════════════════════════
+//  DRAW HELPERS
+// ═══════════════════════════════════════
+const POSE_CONNECTIONS = [
+  [11,12],[11,13],[13,15],[12,14],[14,16], // arms
+  [11,23],[12,24],[23,24],                  // torso
+  [23,25],[25,27],[24,26],[26,28],           // legs
+  [27,29],[29,31],[28,30],[30,32],           // feet
+];
+
+function drawSkeleton(ctx, lm, W, H) {
+  ctx.save();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineCap = 'round';
+  POSE_CONNECTIONS.forEach(([a, b]) => {
+    const pa = lm[a], pb = lm[b];
+    if (!pa || !pb) return;
+    if ((pa.visibility||0) < 0.3 || (pb.visibility||0) < 0.3) return;
+    ctx.beginPath();
+    ctx.moveTo(pa.x * W, pa.y * H);
+    ctx.lineTo(pb.x * W, pb.y * H);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function drawJoint(ctx, pos, r, color) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 16;
+  ctx.fill();
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════
+//  DEPTH BAR
+// ═══════════════════════════════════════
+function updateDepthBar(hipY, kneeY) {
+  // hipY normalized 0(top)→1(bottom)
+  // bar: 0% = standing, 100% = fully squatted
+  // We use hipY as proxy: higher hipY = deeper squat
+  const fill = document.getElementById('depthFill');
+  const threshold = document.getElementById('depthThreshold');
+
+  // clamp to reasonable range: standing ~30%, deep ~80%
+  const pct = Math.min(100, Math.max(0, ((hipY - 0.2) / 0.6) * 100));
+  const thresholdPct = ((kneeY - 0.2) / 0.6) * 100; // knee position = threshold
+
+  fill.style.height = pct + '%';
+  fill.style.background = hipY > kneeY ? 'var(--rep)' : 'var(--muted)';
+
+  // threshold line (from bottom)
+  const thresholdFromBottom = Math.min(100, Math.max(0, thresholdPct));
+  threshold.style.top = (100 - thresholdFromBottom) + '%';
+}
+
+// ═══════════════════════════════════════
+//  VERDICT DISPLAY
+// ═══════════════════════════════════════
+function showVerdict(type) {
+  const v = document.getElementById('verdict');
+  const flash = document.getElementById('flashOverlay');
+
+  v.className = 'show ' + type;
+  v.textContent = type === 'rep' ? 'REP' : 'NO REP';
+
+  flash.className = type === 'rep' ? 'flash-rep' : 'flash-norep';
+  flash.style.opacity = '1';
+
+  if (verdictTimeout) clearTimeout(verdictTimeout);
+  verdictTimeout = setTimeout(() => {
+    v.classList.remove('show');
+    flash.style.opacity = '0';
+  }, 1000);
+}
+
+function updateScores() {
+  document.getElementById('repCount').textContent = repCount;
+  document.getElementById('noRepCount').textContent = noRepCount;
+  document.getElementById('totalCount').textContent = repCount + noRepCount;
+}
+</script>
+</body>
+</html>
