@@ -467,6 +467,96 @@
 
   #flashOverlay.flash-rep { background: rgba(0,255,136,0.15); }
   #flashOverlay.flash-norep { background: rgba(255,51,85,0.12); }
+
+  /* ── TIMER ── */
+  .hud-timer {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    letter-spacing: 4px;
+    color: var(--muted);
+    transition: color 0.3s;
+    min-width: 74px;
+    text-align: center;
+  }
+  .hud-timer.running { color: var(--rep); }
+
+  /* ── SESSION BUTTON ── */
+  #sessionBtn {
+    padding: 9px 18px;
+    background: rgba(0,255,136,0.12);
+    border: 1.5px solid rgba(0,255,136,0.35);
+    color: var(--rep);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  #sessionBtn.stop {
+    background: rgba(255,51,85,0.12);
+    border-color: rgba(255,51,85,0.4);
+    color: var(--norep);
+  }
+  #resetBtn {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+  }
+
+  /* ── CALIB BUTTON ── */
+  #calibBtn {
+    background: rgba(255,204,0,0.12);
+    border: 1px solid rgba(255,204,0,0.35);
+    color: var(--accent);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 2px;
+    padding: 5px 13px;
+    border-radius: 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #calibBtn.calibrated {
+    background: rgba(0,255,136,0.12);
+    border-color: rgba(0,255,136,0.35);
+    color: var(--rep);
+  }
+
+  /* ── CALIB COUNTDOWN OVERLAY ── */
+  #calibOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0,0,0,0.65);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  .calib-box {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    padding: 28px 32px;
+    text-align: center;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .calib-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); letter-spacing: 3px; }
+  .calib-desc  { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .calib-count { font-family: 'Bebas Neue', sans-serif; font-size: 64px; color: var(--rep); line-height: 1; }
+  .calib-skip  { font-size: 11px; color: var(--muted); cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -584,10 +674,24 @@
   <!-- Flash -->
   <div id="flashOverlay"></div>
 
+  <!-- Calibration countdown overlay -->
+  <div id="calibOverlay">
+    <div class="calib-box">
+      <div class="calib-title">캘리브레이션</div>
+      <div class="calib-desc">바르게 서서 기다리세요.<br>서있는 자세를 기준으로 등록합니다.</div>
+      <div class="calib-count" id="calibCount">3</div>
+      <div class="calib-skip" onclick="skipCalib()">건너뛰기</div>
+    </div>
+  </div>
+
   <!-- HUD top -->
   <div class="hud-top">
     <div class="hud-logo">SQUAT DEPTH</div>
-    <button class="back-btn" onclick="goBack()">← 가이드</button>
+    <div id="timer" class="hud-timer">00:00</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="calibBtn" onclick="startCalib()">⚡ CALIB</button>
+      <button class="back-btn" onclick="goBack()">← 가이드</button>
+    </div>
   </div>
 
   <!-- Detection status -->
@@ -620,6 +724,8 @@
         <div class="score-label">TOTAL</div>
         <div class="score-val neutral" id="totalCount">0</div>
       </div>
+      <button id="sessionBtn" onclick="toggleSession()">▶ START</button>
+      <button id="resetBtn" onclick="resetScores()">RESET</button>
     </div>
   </div>
 
@@ -633,6 +739,51 @@ let pose = null;
 let camera = null;
 let repCount = 0;
 let noRepCount = 0;
+
+// ── SESSION ──
+let sessionActive = false;
+let sessionSecs = 0;
+let sessionInterval = null;
+
+function startSession() {
+  repCount = 0; noRepCount = 0; updateScores();
+  // FSM 초기화
+  hipDescendStart = null; hipDescendMax = null;
+  wasBelow = false; lastHipNorm = null;
+  repRegistered = false; noRepRegistered = false;
+  sqBelowFrames = 0;
+  sessionSecs = 0; updateTimer();
+  if (sessionInterval) clearInterval(sessionInterval);
+  sessionInterval = setInterval(() => { sessionSecs++; updateTimer(); }, 1000);
+  sessionActive = true;
+  document.getElementById('sessionBtn').textContent = '■ STOP';
+  document.getElementById('sessionBtn').classList.add('stop');
+  document.getElementById('timer').classList.add('running');
+}
+
+function stopSession() {
+  sessionActive = false;
+  clearInterval(sessionInterval); sessionInterval = null;
+  document.getElementById('sessionBtn').textContent = '▶ START';
+  document.getElementById('sessionBtn').classList.remove('stop');
+  document.getElementById('timer').classList.remove('running');
+}
+
+function toggleSession() { sessionActive ? stopSession() : startSession(); }
+
+function updateTimer() {
+  const m = String(Math.floor(sessionSecs / 60)).padStart(2, '0');
+  const s = String(sessionSecs % 60).padStart(2, '0');
+  document.getElementById('timer').textContent = m + ':' + s;
+}
+
+function resetScores() {
+  repCount = 0; noRepCount = 0; updateScores();
+  hipDescendStart = null; hipDescendMax = null;
+  wasBelow = false; lastHipNorm = null;
+  repRegistered = false; noRepRegistered = false;
+  sqBelowFrames = 0;
+}
 
 // squat state machine
 // phases: 'standing' → 'descending' → 'bottom' → 'ascending' → 'standing'
@@ -651,7 +802,10 @@ function showScreen(id) {
 }
 
 function goBack() {
+  stopSession();
+  if (calibTimer) clearInterval(calibTimer);
   if (camera) { try { camera.stop(); } catch(e){} }
+  hipSm.reset(); kneeSm.reset();
   showScreen('guideScreen');
 }
 
@@ -701,93 +855,6 @@ async function startCamera() {
   }
 }
 
-// ═══════════════════════════════════════
-//  POSE RESULT HANDLER
-// ═══════════════════════════════════════
-function onPoseResults(results, canvas, ctx) {
-  const W = canvas.width;
-  const H = canvas.height;
-
-  // Draw video frame
-  ctx.save();
-  ctx.clearRect(0, 0, W, H);
-  // Draw flipped video (mirror for rear cam side shot)
-  ctx.drawImage(results.image, 0, 0, W, H);
-  ctx.restore();
-
-  if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
-    document.getElementById('detectStatus').textContent = '사람을 찾는 중...';
-    document.getElementById('detectStatus').classList.remove('detected');
-    return;
-  }
-
-  document.getElementById('detectStatus').textContent = '포즈 감지됨 ✓';
-  document.getElementById('detectStatus').classList.add('detected');
-
-  const lm = results.poseLandmarks;
-
-  // ── Pick the side with higher visibility (hip + knee)
-  // Left side: hip=23, knee=25 / Right side: hip=24, knee=26
-  const leftHip   = lm[23];
-  const leftKnee  = lm[25];
-  const rightHip  = lm[24];
-  const rightKnee = lm[26];
-
-  const leftVis  = (leftHip.visibility  || 0) + (leftKnee.visibility  || 0);
-  const rightVis = (rightHip.visibility || 0) + (rightKnee.visibility || 0);
-
-  let hip, knee, hipIdx, kneeIdx;
-  if (leftVis >= rightVis) {
-    hip = leftHip; knee = leftKnee; hipIdx = 23; kneeIdx = 25;
-  } else {
-    hip = rightHip; knee = rightKnee; hipIdx = 24; kneeIdx = 26;
-  }
-
-  const hipPx  = { x: hip.x  * W, y: hip.y  * H };
-  const kneePx = { x: knee.x * W, y: knee.y * H };
-
-  // depth = hip.y (larger y = lower on screen)
-  // hip below knee = hip.y > knee.y
-  const hipBelowKnee = hipPx.y > kneePx.y;
-
-  // ── Draw skeleton (simplified: just key joints)
-  drawSkeleton(ctx, lm, W, H);
-
-  // ── Highlight hip & knee
-  drawJoint(ctx, hipPx, 10, '#ffcc00');
-  drawJoint(ctx, kneePx, 10, '#00aaff');
-
-  // Labels
-  ctx.font = 'bold 13px Noto Sans KR';
-  ctx.fillStyle = '#ffcc00';
-  ctx.fillText('HIP', hipPx.x + 14, hipPx.y + 4);
-  ctx.fillStyle = '#00aaff';
-  ctx.fillText('KNEE', kneePx.x + 14, kneePx.y + 4);
-
-  // Depth indicator line (hip → knee horizontal guide)
-  ctx.save();
-  ctx.setLineDash([6, 4]);
-  ctx.strokeStyle = hipBelowKnee ? 'rgba(0,255,136,0.5)' : 'rgba(255,51,85,0.5)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(hipPx.x, hipPx.y);
-  ctx.lineTo(kneePx.x, hipPx.y);
-  ctx.stroke();
-  // vertical line knee height
-  ctx.setLineDash([]);
-  ctx.strokeStyle = 'rgba(0,170,255,0.4)';
-  ctx.beginPath();
-  ctx.moveTo(kneePx.x, kneePx.y - 30);
-  ctx.lineTo(kneePx.x, kneePx.y + 30);
-  ctx.stroke();
-  ctx.restore();
-
-  // ── Depth bar
-  updateDepthBar(hip.y, knee.y);
-
-  // ── Squat state machine
-  processSquat(hipBelowKnee);
-}
 
 // ═══════════════════════════════════════
 //  SQUAT STATE MACHINE
@@ -830,50 +897,113 @@ let hipDescendStart = null;
 let hipDescendMax = null;
 let noRepRegistered = false;
 let lastHipNorm = null;
+let sqBelowFrames = 0;
 
-function processSquatAdvanced(hipY, kneeY, hipBelowKnee) {
-  // hipY and kneeY are normalized 0-1
+// ── CALIBRATION ──
+let calibrated = false;
+let calibKneeY = null, calibAnkleY = null, calibShoulderY = null;
+let calibTimer = null, calibCountdown = 3;
+let latestLm = null;
+
+function startCalib() {
+  document.getElementById('calibOverlay').style.display = 'flex';
+  calibCountdown = 3;
+  document.getElementById('calibCount').textContent = calibCountdown;
+  if (calibTimer) clearInterval(calibTimer);
+  calibTimer = setInterval(() => {
+    calibCountdown--;
+    document.getElementById('calibCount').textContent = calibCountdown;
+    if (calibCountdown <= 0) { clearInterval(calibTimer); doCalibrate(); }
+  }, 1000);
+}
+
+function skipCalib() {
+  clearInterval(calibTimer);
+  document.getElementById('calibOverlay').style.display = 'none';
+}
+
+function doCalibrate() {
+  document.getElementById('calibOverlay').style.display = 'none';
+  if (!latestLm) return;
+  const lm = latestLm;
+  const lH = lm[23], lK = lm[25], lA = lm[27], lS = lm[11];
+  const rH = lm[24], rK = lm[26], rA = lm[28], rS = lm[12];
+  const lv = (lH.visibility||0) + (lK.visibility||0);
+  const rv = (rH.visibility||0) + (rK.visibility||0);
+  const knee     = lv >= rv ? lK : rK;
+  const ankle    = lv >= rv ? lA : rA;
+  const shoulder = lv >= rv ? lS : rS;
+  calibKneeY     = knee.y;
+  calibAnkleY    = ankle    ? ankle.y    : knee.y + 0.15;
+  calibShoulderY = shoulder ? shoulder.y : knee.y - 0.35;
+  calibrated = true;
+  lastHipNorm = null; // FSM 재시작
+  const btn = document.getElementById('calibBtn');
+  btn.textContent = '✓ CALIB';
+  btn.classList.add('calibrated');
+}
+
+// ── SMOOTHER (6-frame moving average) ──
+class Smoother {
+  constructor(n) { this.n = n; this.buf = []; }
+  push(v) {
+    this.buf.push(v);
+    if (this.buf.length > this.n) this.buf.shift();
+    return this.buf.reduce((a, b) => a + b, 0) / this.buf.length;
+  }
+  reset() { this.buf = []; }
+}
+const hipSm  = new Smoother(6);
+const kneeSm = new Smoother(6);
+
+function processSquatAdvanced(rawHipY, rawKneeY) {
+  // 세션 중이 아니면 무시
+  if (!sessionActive) { lastHipNorm = rawHipY; return; }
+
+  // 6프레임 스무딩
+  const hipY  = hipSm.push(rawHipY);
+  const kneeY = kneeSm.push(rawKneeY);
+
+  // 기준선: 캘리브 시 고정된 무릎 Y (핵심 정확도 개선)
+  //         미캘리브 시 현재 무릎 Y 사용
+  const threshold = calibrated ? calibKneeY : kneeY;
+  const below = hipY > threshold;
+
+  // 드웰 카운터: 3프레임 이상 below 여야 확정
+  sqBelowFrames = below
+    ? Math.min(sqBelowFrames + 1, 30)
+    : Math.max(sqBelowFrames - 2, 0);
+  if (sqBelowFrames >= 3) wasBelow = true;
 
   if (lastHipNorm === null) { lastHipNorm = hipY; return; }
 
-  const descending = hipY > lastHipNorm + 0.005;
-  const ascending  = hipY < lastHipNorm - 0.005;
+  const descending = hipY > lastHipNorm + 0.004;
+  const ascending  = hipY < lastHipNorm - 0.004;
 
-  // Start of descent
+  // 최소 하강량: 체고의 12% or 고정값
+  const minDesc = (calibrated && calibAnkleY && calibShoulderY)
+    ? (calibAnkleY - calibShoulderY) * 0.12
+    : 0.08;
+
   if (descending && hipDescendStart === null) {
-    hipDescendStart = hipY;
-    hipDescendMax = hipY;
-    noRepRegistered = false;
-    repRegistered = false;
+    hipDescendStart = hipY; hipDescendMax = hipY;
+    noRepRegistered = false; repRegistered = false;
   }
 
-  // Track max descent
-  if (hipDescendStart !== null && hipY > hipDescendMax) {
-    hipDescendMax = hipY;
-    if (hipBelowKnee) wasBelow = true;
-  }
+  if (hipDescendStart !== null && hipY > hipDescendMax) hipDescendMax = hipY;
 
-  // Ascending after a descent
   if (ascending && hipDescendStart !== null) {
     const descended = hipDescendMax - hipDescendStart;
-    if (descended > 0.08) { // meaningful descent
+    if (descended > minDesc) {
       if (wasBelow && !repRegistered) {
-        repCount++;
-        repRegistered = true;
-        showVerdict('rep');
-        updateScores();
+        repCount++; repRegistered = true; showVerdict('rep'); updateScores();
       } else if (!wasBelow && !noRepRegistered) {
-        noRepCount++;
-        noRepRegistered = true;
-        showVerdict('norep');
-        updateScores();
+        noRepCount++; noRepRegistered = true; showVerdict('norep'); updateScores();
       }
     }
-    // Reset if fully back to start
     if (hipY < hipDescendStart + 0.03) {
-      hipDescendStart = null;
-      hipDescendMax = null;
-      wasBelow = false;
+      hipDescendStart = null; hipDescendMax = null;
+      wasBelow = false; sqBelowFrames = 0;
     }
   }
 
@@ -885,20 +1015,15 @@ function processSquat(hipBelowKnee, hipY, kneeY) {
   // called from onPoseResults with full y values
 }
 
-// Patch onPoseResults to call advanced
-const _origOnPose = onPoseResults;
-
 // ═══════════════════════════════════════
-//  RE-WIRE: replace simple state machine
+//  POSE RESULT HANDLER (개선판)
 // ═══════════════════════════════════════
 function onPoseResults(results, canvas, ctx) {
   const W = canvas.width;
   const H = canvas.height;
 
-  ctx.save();
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(results.image, 0, 0, W, H);
-  ctx.restore();
 
   if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
     document.getElementById('detectStatus').textContent = '사람을 찾는 중...';
@@ -906,58 +1031,81 @@ function onPoseResults(results, canvas, ctx) {
     return;
   }
 
-  document.getElementById('detectStatus').textContent = '포즈 감지됨 ✓';
-  document.getElementById('detectStatus').classList.add('detected');
-
+  latestLm = results.poseLandmarks; // 캘리브레이션용 스냅샷 저장
   const lm = results.poseLandmarks;
 
-  const leftHip   = lm[23], leftKnee  = lm[25];
-  const rightHip  = lm[24], rightKnee = lm[26];
-  const leftVis   = (leftHip.visibility||0)+(leftKnee.visibility||0);
-  const rightVis  = (rightHip.visibility||0)+(rightKnee.visibility||0);
+  const lH = lm[23], lK = lm[25];
+  const rH = lm[24], rK = lm[26];
+  const lv = (lH.visibility||0) + (lK.visibility||0);
+  const rv = (rH.visibility||0) + (rK.visibility||0);
 
   let hip, knee;
-  if (leftVis >= rightVis) { hip = leftHip; knee = leftKnee; }
-  else { hip = rightHip; knee = rightKnee; }
+  if (lv >= rv) { hip = lH; knee = lK; }
+  else          { hip = rH; knee = rK; }
 
   const hipPx  = { x: hip.x  * W, y: hip.y  * H };
   const kneePx = { x: knee.x * W, y: knee.y * H };
-  const hipBelowKnee = hip.y > knee.y;
 
-  // Draw
+  // 판정용 기준선: 캘리브 고정 / 미캘리브 현재 무릎
+  const thresholdY  = calibrated ? calibKneeY : knee.y;
+  const hipBelowKnee = hip.y > thresholdY;
+
+  // 스켈레톤 & 관절
   drawSkeleton(ctx, lm, W, H);
-  drawJoint(ctx, hipPx, 12, '#ffcc00');
+  drawJoint(ctx, hipPx,  12, '#ffcc00');
   drawJoint(ctx, kneePx, 12, '#00aaff');
 
+  // 라벨
+  ctx.save();
   ctx.font = 'bold 14px "Noto Sans KR", sans-serif';
-  ctx.shadowColor = 'rgba(0,0,0,0.8)';
-  ctx.shadowBlur = 4;
-  ctx.fillStyle = '#ffcc00';
-  ctx.fillText('HIP', hipPx.x + 16, hipPx.y + 5);
-  ctx.fillStyle = '#00aaff';
-  ctx.fillText('KNEE', kneePx.x + 16, kneePx.y + 5);
-  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
+  ctx.fillStyle = '#ffcc00'; ctx.fillText('HIP',  hipPx.x  + 16, hipPx.y  + 5);
+  ctx.fillStyle = '#00aaff'; ctx.fillText('KNEE', kneePx.x + 16, kneePx.y + 5);
+  ctx.shadowBlur = 0; ctx.restore();
 
-  // Depth guide lines
+  // 기준선 (캘리브 시 고정선, 미캘리브 시 현재 무릎)
+  const refLineY = thresholdY * H;
   ctx.save();
   ctx.setLineDash([8, 5]);
   ctx.lineWidth = 2;
-  ctx.strokeStyle = hipBelowKnee ? 'rgba(0,255,136,0.6)' : 'rgba(255,51,85,0.6)';
-  ctx.beginPath();
-  ctx.moveTo(0, kneePx.y);
-  ctx.lineTo(W, kneePx.y);
-  ctx.stroke();
-  ctx.restore();
-
-  // Label the threshold line
-  ctx.save();
+  ctx.strokeStyle = hipBelowKnee ? 'rgba(0,255,136,0.7)' : 'rgba(255,51,85,0.6)';
+  ctx.beginPath(); ctx.moveTo(0, refLineY); ctx.lineTo(W, refLineY); ctx.stroke();
+  ctx.setLineDash([]);
   ctx.font = 'bold 11px "Bebas Neue", monospace';
   ctx.fillStyle = hipBelowKnee ? '#00ff88' : '#ff3355';
-  ctx.fillText('KNEE LINE', 10, kneePx.y - 6);
+  const lineLabel = calibrated ? 'KNEE LINE [CALIB]' : 'KNEE LINE';
+  ctx.fillText(lineLabel, 10, refLineY - 6);
   ctx.restore();
 
+  // 상태 텍스트
+  const st = document.getElementById('detectStatus');
+  if (calibrated) {
+    st.textContent = sessionActive ? '판정 중 ✓' : 'CALIB 완료 — START 를 눌러 시작';
+    st.className = 'detect-status detected';
+  } else {
+    st.textContent = sessionActive ? '포즈 감지됨 ✓' : 'CALIB 권장 — START 를 눌러 시작';
+    st.className = 'detect-status' + (sessionActive ? ' detected' : '');
+  }
+
+  // 캔버스에 REP 수 크게 표시 (세션 중)
+  if (sessionActive) {
+    ctx.save();
+    const fontSize = Math.max(60, Math.round(H * 0.13));
+    ctx.font = `bold ${fontSize}px 'Bebas Neue', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,255,136,0.38)';
+    ctx.shadowColor = 'rgba(0,255,136,0.5)'; ctx.shadowBlur = 22;
+    ctx.fillText(repCount, W * 0.25, H * 0.55);
+    ctx.shadowBlur = 0;
+    ctx.font = 'bold 12px "Noto Sans KR"';
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.fillText('REPS', W * 0.25, H * 0.55 + 18);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
   updateDepthBar(hip.y, knee.y);
-  processSquatAdvanced(hip.y, knee.y, hipBelowKnee);
+  processSquatAdvanced(hip.y, knee.y); // 인수 2개로 변경
 }
 
 // ═══════════════════════════════════════
