@@ -313,11 +313,12 @@
     position: absolute;
     bottom: 0; left: 0; right: 0;
     z-index: 10;
-    padding: 20px;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    padding: 10px 16px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+    background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
   }
 
   .score-row {
@@ -347,7 +348,7 @@
 
   .score-val {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 36px;
+    font-size: 28px;
     line-height: 1;
   }
 
@@ -720,6 +721,10 @@
 
   <!-- HUD bottom -->
   <div class="hud-bottom">
+    <div class="ctrl-row">
+      <button id="sessionBtn" onclick="toggleSession()">▶ START</button>
+      <button id="resetBtn" onclick="resetScores()">RESET</button>
+    </div>
     <div class="score-row">
       <div class="score-card">
         <div class="score-label">REP</div>
@@ -733,10 +738,6 @@
         <div class="score-label">TOTAL</div>
         <div class="score-val neutral" id="totalCount">0</div>
       </div>
-    </div>
-    <div class="ctrl-row">
-      <button id="sessionBtn" onclick="toggleSession()">▶ START</button>
-      <button id="resetBtn" onclick="resetScores()">RESET</button>
     </div>
   </div>
 
