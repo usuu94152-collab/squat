@@ -322,7 +322,7 @@
 
   .score-row {
     display: flex;
-    gap: 12px;
+    gap: 8px;
     justify-content: center;
   }
 
@@ -330,9 +330,11 @@
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 12px;
-    padding: 10px 20px;
+    padding: 8px 14px;
     text-align: center;
-    min-width: 80px;
+    min-width: 0;
+    flex: 1;
+    max-width: 110px;
   }
 
   .score-label {
@@ -482,33 +484,40 @@
 
   /* ── SESSION BUTTON ── */
   #sessionBtn {
-    padding: 9px 18px;
-    background: rgba(0,255,136,0.12);
-    border: 1.5px solid rgba(0,255,136,0.35);
-    color: var(--rep);
+    padding: 12px 0;
+    width: 200px;
+    background: var(--rep);
+    border: none;
+    color: #000;
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 18px;
-    letter-spacing: 2px;
-    border-radius: 10px;
+    font-size: 22px;
+    letter-spacing: 3px;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.15s;
-    flex-shrink: 0;
   }
+  #sessionBtn:active { transform: scale(0.97); }
   #sessionBtn.stop {
-    background: rgba(255,51,85,0.12);
-    border-color: rgba(255,51,85,0.4);
-    color: var(--norep);
+    background: var(--norep);
+    color: #fff;
   }
   #resetBtn {
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.15);
     color: var(--muted);
     font-size: 11px;
-    padding: 6px 10px;
+    padding: 6px 14px;
     border-radius: 8px;
     cursor: pointer;
     letter-spacing: 1px;
-    flex-shrink: 0;
+  }
+
+  /* 버튼 전용 행 */
+  .ctrl-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
   }
 
   /* ── CALIB BUTTON ── */
@@ -724,6 +733,8 @@
         <div class="score-label">TOTAL</div>
         <div class="score-val neutral" id="totalCount">0</div>
       </div>
+    </div>
+    <div class="ctrl-row">
       <button id="sessionBtn" onclick="toggleSession()">▶ START</button>
       <button id="resetBtn" onclick="resetScores()">RESET</button>
     </div>
